@@ -1768,7 +1768,7 @@ class User_table_json: public User_table
     const char *value_start;
     enum json_types value_type;
     json_engine_t temp_je;
-    int temp_stack[JSON_DEPTH_DEFAULT];
+    MEM_ROOT_DYNAMIC_ARRAY temp_stack;
 
     temp_je.stack= temp_stack;
     String str, *res= m_table->field[2]->val_str(&str);
@@ -1796,7 +1796,7 @@ class User_table_json: public User_table
     if (!value_type && string)
       json.append('"');
     json.append(value_start, res->end() - value_start);
-    DBUG_ASSERT((json_valid(json.ptr(), json.length(), json.charset(), &temp_je) == 0));
+    DBUG_ASSERT((json_valid(NULL, json.ptr(), json.length(), json.charset(), &temp_je) == 0));
     m_table->field[2]->store(json.ptr(), json.length(), json.charset());
     return value_type;
   }
