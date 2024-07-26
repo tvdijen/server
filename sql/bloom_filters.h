@@ -50,10 +50,10 @@ struct PatternedSimdBloomFilter
     bv.resize(num_blocks);
   }
 
-  uint64_t ComputeNumBits()
+  uint32_t ComputeNumBits()
   {
     double bits_per_val = -1.44 * std::log2(epsilon);
-    return std::max<uint64_t>(512, bits_per_val * n + 0.5);
+    return std::max<uint32_t>(512, static_cast<uint32_t>(bits_per_val * n + 0.5));
   }
 
 #ifdef INTEL_SIMD_IMPLEMENTATION
@@ -190,9 +190,9 @@ struct PatternedSimdBloomFilter
     return step9 ^ (step9 >> 28);
   }
 
-  uint GetBlockIdx_1(uint64_t hash)
+  uint64_t GetBlockIdx_1(uint64_t hash)
   {
-    uint64 blockIdx = hash >> (mask_idx_bits + rotate_bits);
+    uint64_t blockIdx = hash >> (mask_idx_bits + rotate_bits);
     return blockIdx & (num_blocks - 1);
   }
 
@@ -238,7 +238,7 @@ struct PatternedSimdBloomFilter
   float epsilon;
 
   uint64_t num_blocks;
-  uint64_t m;
+  uint32_t m;
   // calculated from the upstream MaskTable and hard-coded
   static constexpr int log_num_masks = 10;
   static constexpr int bits_per_mask = 57;
