@@ -7388,7 +7388,7 @@ static Sys_var_uint Sys_mhnsw_max_edges_per_node(
        "Larger values means slower INSERT, larger index size and higher "
        "memory consumption, but better search results. Not used for SELECT",
        SESSION_VAR(mhnsw_max_edges_per_node), CMD_LINE(REQUIRED_ARG),
-       VALID_RANGE(2, 200), DEFAULT(15), BLOCK_SIZE(1));
+       VALID_RANGE(2, 200), DEFAULT(6), BLOCK_SIZE(1));
 static Sys_var_ulonglong Sys_mhnsw_cache_size(
        "mhnsw_cache_size", "Size of the cache for the MHNSW vector index",
        GLOBAL_VAR(mhnsw_cache_size), CMD_LINE(REQUIRED_ARG),

@@ -1795,7 +1795,7 @@ metadata-locks-cache-size 1024
 metadata-locks-hash-instances 8
 mhnsw-cache-size 16777216
 mhnsw-limit-multiplier 2
-mhnsw-max-edges-per-node 15
+mhnsw-max-edges-per-node 6
 min-examined-row-limit 0
 mrr-buffer-size 262144
 myisam-block-size 1024
