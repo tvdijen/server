@@ -24,16 +24,11 @@
 
 ulonglong mhnsw_cache_size;
 
-#define clo_nei_size 4
-#define clo_nei_store float4store
-#define clo_nei_read  float4get
-
 // Algorithm parameters
 static constexpr float alpha = 1.1f;
 static constexpr float generosity = 1.2f;
 static constexpr double stiffness = 0.002;
 static constexpr uint ef_construction_max_factor= 16;
-static constexpr uint clo_nei_threshold= 10000;
 
 enum Graph_table_fields {
   FIELD_LAYER, FIELD_TREF, FIELD_VEC, FIELD_NEIGHBORS
@@ -128,7 +123,6 @@ struct FVector
   An array of pointers to graph nodes
 
   It's mainly used to store all neighbors of a given node on a given layer.
-  Additionally it stores the distance to the closest neighbor.
 
   An array is fixed size, 2*M for the zero layer, M for other layers
   see MHNSW_Context::max_neighbors().
@@ -142,11 +136,9 @@ struct Neighborhood: public Sql_alloc
 {
   FVectorNode **links;
   size_t num;
-  float closest;
-  void empty() { closest= FLT_MAX; num=0; }
   FVectorNode **init(FVectorNode **ptr, size_t n)
   {
-    empty();
+    num= 0;
     links= ptr;
     n= MY_ALIGN(n, 8);
     bzero(ptr, n*sizeof(*ptr));
@@ -678,17 +670,15 @@ int FVectorNode::load_from_record(TABLE *graph)
   if (unlikely(!v))
     return my_errno= HA_ERR_CRASHED;
 
-  // <N> <closest distance> <gref> <gref> ... <N> <closest distance> ...etc...
+  // <N> distance> <gref> <gref> ... <N> ...etc...
   uchar *ptr= (uchar*)v->ptr(), *end= ptr + v->length();
   for (size_t i=0; i <= max_layer; i++)
   {
     if (unlikely(ptr >= end))
       return my_errno= HA_ERR_CRASHED;
     size_t grefs= *ptr++;
-    if (unlikely(ptr + clo_nei_size + grefs * gref_len() > end))
+    if (unlikely(ptr + grefs * gref_len() > end))
       return my_errno= HA_ERR_CRASHED;
-    clo_nei_read(neighbors[i].closest, ptr);
-    ptr+= clo_nei_size;
     neighbors[i].num= grefs;
     for (size_t j=0; j < grefs; j++, ptr+= gref_len())
       neighbors[i].links[j]= ctx->get_node(ptr);
@@ -697,14 +687,10 @@ int FVectorNode::load_from_record(TABLE *graph)
   return 0;
 }
 
-/* note that "closest" relation is asymmetric! */
 void FVectorNode::push_neighbor(size_t layer, float dist, FVectorNode *other)
 {
   DBUG_ASSERT(neighbors[layer].num < ctx->max_neighbors(layer));
   neighbors[layer].links[neighbors[layer].num++]= other;
-  if (memcmp(gref(), other->gref(), gref_len()) < 0 &&
-      neighbors[layer].closest > dist)
-    neighbors[layer].closest= dist;
 }
 
 size_t FVectorNode::tref_len() const { return ctx->tref_len; }
@@ -792,7 +778,6 @@ static int select_neighbors(MHNSW_Context *ctx, TABLE *graph, size_t layer,
   auto discarded= (Visited**)my_safe_alloca(sizeof(Visited**)*max_neighbor_connections);
   size_t discarded_num= 0;
   Neighborhood &neighbors= target.neighbors[layer];
-  const bool do_cn= max_neighbor_connections*ctx->vec_len > clo_nei_threshold;
 
   for (size_t i=0; i < candidates.num; i++)
   {
@@ -805,7 +790,7 @@ static int select_neighbors(MHNSW_Context *ctx, TABLE *graph, size_t layer,
     pq.push(new (root) Visited(extra_candidate, extra_candidate->distance_to(target.vec)));
 
   DBUG_ASSERT(pq.elements());
-  neighbors.empty();
+  neighbors.num= 0;
 
   while (pq.elements() && neighbors.num < max_neighbor_connections)
   {
@@ -813,14 +798,9 @@ static int select_neighbors(MHNSW_Context *ctx, TABLE *graph, size_t layer,
     FVectorNode * const node= vec->node;
     const float target_dista= vec->distance_to_target / alpha;
     bool discard= false;
-    if (do_cn)
-      discard= node->neighbors[layer].closest < target_dista;
-    else
-    {
-      for (size_t i=0; i < neighbors.num; i++)
-        if ((discard= node->distance_to(neighbors.links[i]->vec) < target_dista))
-          break;
-    }
+    for (size_t i=0; i < neighbors.num; i++)
+      if ((discard= node->distance_to(neighbors.links[i]->vec) < target_dista))
+        break;
     if (!discard)
       target.push_neighbor(layer, vec->distance_to_target, node);
     else if (discarded_num + neighbors.num < max_neighbor_connections)
@@ -852,15 +832,13 @@ int FVectorNode::save(TABLE *graph)
 
   size_t total_size= 0;
   for (size_t i=0; i <= max_layer; i++)
-    total_size+= 1 + clo_nei_size + gref_len() * neighbors[i].num;
+    total_size+= 1 + gref_len() * neighbors[i].num;
 
   uchar *neighbor_blob= static_cast<uchar *>(my_safe_alloca(total_size));
   uchar *ptr= neighbor_blob;
   for (size_t i= 0; i <= max_layer; i++)
   {
     *ptr++= (uchar)(neighbors[i].num);
-    clo_nei_store(ptr, neighbors[i].closest);
-    ptr+= clo_nei_size;
     for (size_t j= 0; j < neighbors[i].num; j++, ptr+= gref_len())
       memcpy(ptr, neighbors[i].links[j]->gref(), gref_len());
   }
@@ -915,7 +893,7 @@ static int search_layer(MHNSW_Context *ctx, TABLE *graph, const FVector *target,
                         size_t layer, Neighborhood *result, bool construction)
 {
   DBUG_ASSERT(start_nodes->num > 0);
-  result->empty();
+  result->num= 0;
 
   MEM_ROOT * const root= graph->in_use->mem_root;
   Queue<Visited> candidates, best;
