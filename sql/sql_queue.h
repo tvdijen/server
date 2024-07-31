@@ -51,11 +51,11 @@ public:
   }
   Element *pop() { return (Element *)queue_remove_top(&m_queue); }
   void clear() { queue_remove_all(&m_queue); }
-  uint propagate_top() { return queue_replace_top(&m_queue); }
-  uint replace_top(const Element *element)
+  void propagate_top() { queue_replace_top(&m_queue); }
+  void replace_top(const Element *element)
   {
     queue_top(&m_queue)= (uchar*)element;
-    return propagate_top();
+    propagate_top();
   }
 private:
   QUEUE m_queue;
