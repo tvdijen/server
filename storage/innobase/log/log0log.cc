@@ -804,7 +804,7 @@ void log_t::resize_write_buf(size_t length) noexcept
   }
 
   ut_a(os_file_write_func(IORequestWrite, "ib_logfile101", resize_log.m_file,
-                          buf, offset, length) == DB_SUCCESS);
+                          resize_flush_buf, offset, length) == DB_SUCCESS);
 }
 
 /** Write buf to ib_logfile0.
