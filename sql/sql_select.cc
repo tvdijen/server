@@ -9164,6 +9164,7 @@ choose_plan(JOIN *join, table_map join_tables)
   THD *thd= join->thd;
   DBUG_ENTER("choose_plan");
 
+  join->limit_optimization_mode= false;
   join->cur_embedding_map= 0;
   reset_nj_counters(join, join->join_list);
   qsort2_cmp jtab_sort_func;
@@ -11022,6 +11023,7 @@ best_extension_by_limited_search(JOIN      *join,
       if (best_res == SEARCH_FOUND_EDGE)
       {
         trace_one_table.add("pruned_by_hanging_leaf", true);
+        DBUG_ASSERT(!optimizing_shortcut);
         goto end;
       }
     }
@@ -11044,6 +11046,7 @@ best_extension_by_limited_search(JOIN      *join,
   best_res= SEARCH_OK;
 
 end:
+  DBUG_ASSERT(!optimizing_shortcut || !join->limit_optimization_mode);
   /* Restore original table order */
   if (!*pos)
     pos--;                                      // Revert last pos++ in for loop
